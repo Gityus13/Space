@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Earth Visualization</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+            color: white;
+            background: #000;
+        }
+        canvas {
+            display: block;
+        }
+        #info-panel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            max-width: 300px;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        button {
+            margin: 0;
+            padding: 8px 12px;
+            background: #333;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        button:hover {
+            background: #444;
+        }
+        .toggle-on {
+            background: #4CAF50;
+        }
+        .toggle-off {
+            background: #f44336;
+        }
+        .slider-container {
+            margin: 5px 0;
+            grid-column: span 3;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+        input[type="range"] {
+            width: 100%;
+        }
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 18px;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        #satellite-info {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            max-width: 300px;
+            display: none;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        #time-controls {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            border-radius: 8px;
+            display: flex;
+            gap: 10px;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        #search-container {
+            position: absolute;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            border-radius: 8px;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        #satellite-search {
+            padding: 8px;
+            border-radius: 4px;
+            border: none;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            width: 250px;
+        }
+        .hud-value {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        .category-gps { color: #00ff00; }
+        .category-comms { color: #ff00ff; }
+        .category-iss { color: #00ffff; }
+        .category-other { color: #ff5555; }
+    </style>
+</head>
+<body>
+    <div id="info-panel">
+        <h2 style="margin-top:0;border-bottom:1px solid #444;padding-bottom:5px;">Earth Information</h2>
+        <div>UTC Time: <span id="utc-time" class="hud-value">Loading...</span></div>
+        <div>Solar Time: <span id="solar-time" class="hud-value">-</span></div>
+        <div>Season: <span id="season" class="hud-value">-</span></div>
+        <div>Axial Tilt: <span id="axial-tilt" class="hud-value">23.5°</span></div>
+        <div>Satellites: <span id="satellite-count" class="hud-value">0</span></div>
+        <div>Sun Position: <span id="sun-position" class="hud-value">-</span></div>
+        <div>Moon Phase: <span id="moon-phase" class="hud-value">-</span></div>
+    </div>
+
+    <div id="satellite-info">
+        <h3 style="margin-top:0;" id="satellite-name">Satellite Info</h3>
+        <div>Type: <span id="satellite-type" class="hud-value">-</span></div>
+        <div>Altitude: <span id="satellite-altitude" class="hud-value">-</span> km</div>
+        <div>Velocity: <span id="satellite-velocity" class="hud-value">-</span> km/s</div>
+        <div>Inclination: <span id="satellite-inclination" class="hud-value">-</span>°</div>
+        <div>Period: <span id="satellite-period" class="hud-value">-</span> min</div>
+        <div>Launch Date: <span id="satellite-launch" class="hud-value">-</span></div>
+    </div>
+
+    <div id="time-controls">
+        <button id="pause-time">⏸️ Pause</button>
+        <button id="real-time">⏱️ Real Time</button>
+        <button id="speed-10x">10× Speed</button>
+        <button id="speed-100x">100× Speed</button>
+    </div>
+
+    <div id="controls">
+        <button id="toggle-stars" class="toggle-on">Hide Stars</button>
+        <button id="toggle-atmosphere">Atmosphere: On</button>
+        <button id="toggle-lights">City Lights: On</button>
+        
+        <div class="slider-container">
+            <label for="star-brightness">Star Brightness: <span id="star-brightness-value">0.8</span></label>
+            <input type="range" id="star-brightness" min="0.1" max="1" step="0.1" value="0.8">
+        </div>
+    </div>
+
+    <div id="loading">Loading satellite data and textures...<br><span id="loading-details"></span></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/satellite.js@2.0.0/dist/satellite.min.js"></script>
+    <script>
+        // ======================
+        // INITIALIZATION
+        // ======================
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        // Orbit controls
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.minDistance = 1.5;
+        controls.maxDistance = 20;
+        controls.maxPolarAngle = Math.PI * 0.99;
+        camera.position.z = 5;
+
+        // Time variables
+        let timeSpeed = 1;
+        let isPaused = false;
+        let simulatedTime = new Date();
+
+        // ======================
+        // EARTH AND ATMOSPHERE
+        // ======================
+        function updateLoading(text) {
+            document.getElementById('loading-details').textContent = text;
+        }
+
+        updateLoading("Loading Earth textures...");
+        
+        // Earth geometry and textures
+        const earthGeometry = new THREE.SphereGeometry(1, 128, 128);
+        const earthMaterial = new THREE.MeshPhongMaterial({
+            map: new THREE.TextureLoader().load('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/earth_atmos_2048.jpg', () => updateLoading("Loading specular map...")),
+            specularMap: new THREE.TextureLoader().load('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/earth_specular_2048.jpg', () => updateLoading("Loading night lights...")),
+            specular: new THREE.Color('grey'),
+            shininess: 10,
+            emissiveMap: new THREE.TextureLoader().load('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/earth_lights_2048.jpg', () => updateLoading("Creating Earth...")),
+            emissive: new THREE.Color(0xffffff),
+            emissiveIntensity: 0.2
+        });
+        
+        const earth = new THREE.Mesh(earthGeometry, earthMaterial);
+        earth.castShadow = true;
+        earth.receiveShadow = true;
+        scene.add(earth);
+
+        // Clouds
+        const cloudGeometry = new THREE.SphereGeometry(1.005, 128, 128);
+        const cloudMaterial = new THREE.MeshPhongMaterial({
+            map: new THREE.TextureLoader().load('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/earth_clouds_1024.png', () => updateLoading("Finalizing clouds...")),
+            transparent: true,
+            opacity: 0.4,
+            shininess: 0
+        });
+        const clouds = new THREE.Mesh(cloudGeometry, cloudMaterial);
+        scene.add(clouds);
+
+        // Atmospheric glow
+        updateLoading("Creating atmosphere...");
+        const atmosphere = new THREE.Mesh(
+            new THREE.SphereGeometry(1.1, 64, 64),
+            new THREE.ShaderMaterial({
+                uniforms: {
+                    glowColor: { type: "c", value: new THREE.Color(0x00a3ff) },
+                    viewVector: { type: "v3", value: camera.position }
+                },
+                vertexShader: `
+                    uniform vec3 viewVector;
+                    varying float intensity;
+                    void main() {
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                        vec3 actual_normal = normalize(normalMatrix * normal);
+                        intensity = pow(0.7 - dot(actual_normal, normalize(viewVector)), 2.0);
+                    }
+                `,
+                fragmentShader: `
+                    uniform vec3 glowColor;
+                    varying float intensity;
+                    void main() {
+                        vec3 glow = glowColor * intensity;
+                        gl_FragColor = vec4(glow, 0.3);
+                    }
+                `,
+                side: THREE.BackSide,
+                blending: THREE.AdditiveBlending,
+                transparent: true
+            })
+        );
+        scene.add(atmosphere);
+
+        // ======================
+        // LIGHTING AND SUN
+        // ======================
+        updateLoading("Setting up lighting...");
+        const ambientLight = new THREE.AmbientLight(0x404040);
+        scene.add(ambientLight);
+
+        // Sun directional light
+        const sunLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        sunLight.position.set(5, 3, 5);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        sunLight.shadow.camera.near = 0.5;
+        sunLight.shadow.camera.far = 50;
+        scene.add(sunLight);
+
+        // ======================
+        // STARS AND DEEP SPACE
+        // ======================
+        updateLoading("Generating starfield...");
+        const starGeometry = new THREE.BufferGeometry();
+        const starMaterial = new THREE.PointsMaterial({
+            color: 0xffffff,
+            size: 0.05,
+            transparent: true,
+            opacity: 0.8
+        });
+
+        const starVertices = [];
+        for (let i = 0; i < 10000; i++) {
+            const x = (Math.random() - 0.5) * 2000;
+            const y = (Math.random() - 0.5) * 2000;
+            const z = (Math.random() - 0.5) * 2000;
+            starVertices.push(x, y, z);
+        }
+
+        starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+        const stars = new THREE.Points(starGeometry, starMaterial);
+        scene.add(stars);
+
+        // ======================
+        // SATELLITES SYSTEM
+        // ======================
+        updateLoading("Initializing satellite system...");
+        let satellites = [];
+        let satelliteObjects = [];
+        let trails = [];
+        let trailLines = [];
+        let selectedSatellite = null;
+
+        // Satellite classification
+        function classifySatellite(name) {
+            if(/GPS|NAVSTAR/i.test(name)) return {type: "GPS", class: "category-gps"};
+            if(/STARLINK|ONEWEB|IRIDIUM/i.test(name)) return {type: "Communication", class: "category-comms"};
+            if(/ISS|TIANGONG/i.test(name)) return {type: "Space Station", class: "category-iss"};
+            return {type: "Other", class: "category-other"};
+        }
+
+        // Load satellite data from Celestrak
+        async function loadSatellites() {
+            try {
+                updateLoading("Downloading satellite data from Celestrak...");
+                const response = await fetch('https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle');
+                const textData = await response.text();
+                parseTLE(textData);
+                
+                updateLoading("Creating satellite objects...");
+                createSatelliteObjects();
+                
+                document.getElementById('loading').style.display = 'none';
+                updateInfoPanel();
+            } catch (error) {
+                console.error('Error loading satellite data:', error);
+                document.getElementById('loading').textContent = 'Error loading satellite data. Please refresh.';
+            }
+        }
+
+        // Parse TLE data
+        function parseTLE(textData) {
+            const lines = textData.split('\n');
+            for (let i = 0; i < lines.length; i += 3) {
+                if (lines[i].trim() === '') continue;
+                
+                const name = lines[i].trim();
+                const tleLine1 = lines[i+1];
+                const tleLine2 = lines[i+2];
+                
+                if (name && tleLine1 && tleLine2) {
+                    const satrec = satellite.twoline2satrec(tleLine1, tleLine2);
+                    satellites.push({
+                        name: name,
+                        satrec: satrec,
+                        tle1: tleLine1,
+                        tle2: tleLine2,
+                        ...classifySatellite(name)
+                    });
+                }
+            }
+        }
+
+        // Create satellite visualization objects
+        function createSatelliteObjects() {
+            // Clear existing
+            satelliteObjects.forEach(obj => scene.remove(obj));
+            trailLines.forEach(line => scene.remove(line));
+            satelliteObjects = [];
+            trails = [];
+            trailLines = [];
+
+            // Create new
+            satellites.forEach((satellite, index) => {
+                // Create satellite object
+                const geometry = new THREE.SphereGeometry(0.005, 8, 8);
+                const material = new THREE.MeshBasicMaterial({ 
+                    color: satellite.class === "category-gps" ? 0x00ff00 :
+                           satellite.class === "category-comms" ? 0xff00ff :
+                           satellite.class === "category-iss" ? 0x00ffff : 0xff5555
+                });
+                const satelliteMesh = new THREE.Mesh(geometry, material);
+                satelliteMesh.userData = {
+                    name: satellite.name,
+                    index: index,
+                    type: satellite.type,
+                    class: satellite.class
+                };
+                
+                satelliteObjects.push(satelliteMesh);
+                scene.add(satelliteMesh);
+
+                // Create trail
+                const trailGeometry = new THREE.BufferGeometry();
+                const trailMaterial = new THREE.LineBasicMaterial({ 
+                    color: satellite.class === "category-gps" ? 0x00ff00 :
+                           satellite.class === "category-comms" ? 0xff00ff :
+                           satellite.class === "category-iss" ? 0x00ffff : 0xff5555,
+                    transparent: true, 
+                    opacity: 0.7,
+                    linewidth: 1
+                });
+                const trailLine = new THREE.Line(trailGeometry, trailMaterial);
+                trailLine.userData = { index: index };
+                trailLines.push(trailLine);
+                scene.add(trailLine);
+
+                trails[index] = [];
+            });
+        }
+
+        // Update satellite positions
+        function updateSatellitePositions(date) {
+            const gmst = satellite.gstime(date);
+            
+            // Update regular satellites
+            satellites.forEach((satellite, index) => {
+                try {
+                    // Calculate position
+                    const positionAndVelocity = satellite.propagate(satellite.satrec, date);
+                    const positionEci = positionAndVelocity.position;
+                    
+                    if (positionEci) {
+                        const positionGd = satellite.eciToGeodetic(positionEci, gmst);
+                        
+                        // Convert to Three.js coordinates
+                        const altitude = positionGd.height / 6371; // Earth radius = 6371km
+                        const latitude = positionGd.latitude;
+                        const longitude = positionGd.longitude;
+                        
+                        // Convert to Cartesian coordinates (ECEF)
+                        const x = (1 + altitude) * Math.cos(latitude) * Math.cos(longitude);
+                        const y = (1 + altitude) * Math.cos(latitude) * Math.sin(longitude);
+                        const z = (1 + altitude) * Math.sin(latitude);
+                        
+                        // Update position (swap y/z for Three.js coordinate system)
+                        satelliteObjects[index].position.set(x, z, y);
+                        
+                        // Update trail
+                        trails[index].push(new THREE.Vector3(x, z, y));
+                        if (trails[index].length > 100) {
+                            trails[index].shift();
+                        }
+
+                        const trailGeometry = new THREE.BufferGeometry().setFromPoints(trails[index]);
+                        trailLines[index].geometry.dispose();
+                        trailLines[index].geometry = trailGeometry;
+                    }
+                } catch (e) {
+                    console.error(`Error calculating position for ${satellite.name}:`, e);
+                }
+            });
+        }
+
+        // ======================
+        // EARTH ROTATION AND TIME
+        // ======================
+        function updateEarthRotation(date) {
+            // Calculate current UTC time in seconds
+            const hours = date.getUTCHours();
+            const minutes = date.getUTCMinutes();
+            const seconds = date.getUTCSeconds();
+            const milliseconds = date.getUTCMilliseconds();
+            
+            const totalSeconds = hours * 3600 + minutes * 60 + seconds + milliseconds / 1000;
+            const rotationAngle = (totalSeconds / 86400) * Math.PI * 2;
+            
+            // Apply axial tilt (23.5°)
+            const dayOfYear = (Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()) - 
+                             Date.UTC(date.getUTCFullYear(), 0, 0)) / 86400000;
+            const axialTilt = -23.5 * (Math.PI/180) * Math.cos(2 * Math.PI * dayOfYear/365.25);
+            
+            earth.rotation.set(axialTilt, -rotationAngle, 0);
+            clouds.rotation.set(axialTilt, -rotationAngle * 1.02, 0); // Clouds rotate slightly faster
+            
+            // Update sun position based on season
+            const sunAngle = (dayOfYear / 365.25) * Math.PI * 2;
+            sunLight.position.set(
+                Math.cos(sunAngle) * 5,
+                Math.sin(axialTilt) * 3,
+                Math.sin(sunAngle) * 5
+            );
+        }
+
+        // ======================
+        // UI AND CONTROLS
+        // ======================
+        // Satellite selection
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        
+        function onMouseClick(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            
+            raycaster.setFromCamera(mouse, camera);
+            
+            // Check satellites
+            const intersects = raycaster.intersectObjects(satelliteObjects);
+            
+            if (intersects.length > 0) {
+                selectedSatellite = intersects[0].object.userData;
+                showSatInfo(selectedSatellite);
+            } else {
+                document.getElementById('satellite-info').style.display = 'none';
+                selectedSatellite = null;
+            }
+        }
+        
+        function showSatInfo(satData) {
+            const infoDiv = document.getElementById('satellite-info');
+            infoDiv.style.display = 'block';
+            
+            // Find the satellite data
+            const sat = satellites.find(s => s.name === satData.name);
+            
+            // Calculate additional info
+            let altitude = "Calculating...";
+            let velocity = "Calculating...";
+            let inclination = "Calculating...";
+            let period = "Calculating...";
+            
+            if (sat) {
+                try {
+                    // Calculate current position/velocity
+                    const date = isPaused ? simulatedTime : new Date();
+                    const posVel = satellite.propagate(sat.satrec, date);
+                    
+                    if (posVel.position && posVel.velocity) {
+                        // Calculate altitude
+                        const gmst = satellite.gstime(date);
+                        const geodetic = satellite.eciToGeodetic(posVel.position, gmst);
+                        altitude = geodetic.height.toFixed(2);
+                        
+                        // Calculate velocity magnitude (km/s)
+                        velocity = Math.sqrt(
+                            Math.pow(posVel.velocity.x, 2) + 
+                            Math.pow(posVel.velocity.y, 2) + 
+                            Math.pow(posVel.velocity.z, 2)
+                        ).toFixed(2);
+                        
+                        // Get inclination from TLE
+                        inclination = (sat.satrec.inclo * 180/Math.PI).toFixed(2);
+                        
+                        // Calculate period (minutes)
+                        period = ((2 * Math.PI) / sat.satrec.no * 60).toFixed(2);
+                    }
+                } catch (e) {
+                    console.error("Error calculating satellite info:", e);
+                }
+            }
+            
+            // Update UI
+            document.getElementById('satellite-name').textContent = satData.name;
+            document.getElementById('satellite-name').className = satData.class;
+            document.getElementById('satellite-type').textContent = satData.type;
+            document.getElementById('satellite-type').className = satData.class;
+            document.getElementById('satellite-altitude').textContent = altitude;
+            document.getElementById('satellite-velocity').textContent = velocity;
+            document.getElementById('satellite-inclination').textContent = inclination;
+            document.getElementById('satellite-period').textContent = period;
+            document.getElementById('satellite-launch').textContent = sat?.tle1.substr(9, 2) + 
+                "/" + sat?.tle1.substr(11, 2) + "/" + (parseInt(sat?.tle1.substr(9, 2)) + 2000);
+        }
+
+        // Time controls
+        document.getElementById('pause-time').addEventListener('click', function() {
+            isPaused = !isPaused;
+            this.textContent = isPaused ? "▶️ Resume" : "⏸️ Pause";
+        });
+
+        document.getElementById('real-time').addEventListener('click', function() {
+            timeSpeed = 1;
+            isPaused = false;
+            document.getElementById('pause-time').textContent = "⏸️ Pause";
+        });
+
+        document.getElementById('speed-10x').addEventListener('click', function() {
+            timeSpeed = 10;
+            isPaused = false;
+            document.getElementById('pause-time').textContent = "⏸️ Pause";
+        });
+
+        document.getElementById('speed-100x').addEventListener('click', function() {
+            timeSpeed = 100;
+            isPaused = false;
+            document.getElementById('pause-time').textContent = "⏸️ Pause";
+        });
+
+        // Toggle controls
+        document.getElementById('toggle-stars').addEventListener('click', function() {
+            const show = this.classList.contains('toggle-on');
+            stars.visible = !show;
+            this.classList.toggle('toggle-on');
+            this.classList.toggle('toggle-off');
+            this.textContent = show ? 'Show Stars' : 'Hide Stars';
+        });
+
+        document.getElementById('toggle-atmosphere').addEventListener('click', function() {
+            atmosphere.visible = !atmosphere.visible;
+            this.textContent = atmosphere.visible ? 'Atmosphere: On' : 'Atmosphere: Off';
+        });
+
+        document.getElementById('toggle-lights').addEventListener('click', function() {
+            earthMaterial.emissiveIntensity = earthMaterial.emissiveIntensity > 0 ? 0 : 0.2;
+            this.textContent = earthMaterial.emissiveIntensity > 0 ? 'City Lights: On' : 'City Lights: Off';
+        });
+
+        // Slider controls
+        document.getElementById('star-brightness').addEventListener('input', function() {
+            const brightness = parseFloat(this.value);
+            document.getElementById('star-brightness-value').textContent = brightness.toFixed(1);
+            starMaterial.size = brightness * 0.05;
+            starMaterial.opacity = brightness * 0.8;
+            starMaterial.needsUpdate = true;
+        });
+
+        // ======================
+        // INFO PANEL UPDATES
+        // ======================
+        function updateInfoPanel() {
+            document.getElementById('satellite-count').textContent = satellites.length;
+        }
+
+        function updateUTCTime(date) {
+            const timeString = date.toISOString().substr(11, 8);
+            document.getElementById('utc-time').textContent = timeString;
+            
+            // Calculate solar time (local apparent time)
+            const solarTimeOffset = (date.getUTCHours() + (date.getUTCMinutes() / 60)) % 24;
+            document.getElementById('solar-time').textContent = solarTimeOffset.toFixed(2) + "h";
+            
+            // Update season
+            const dayOfYear = (Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()) - 
+                             Date.UTC(date.getUTCFullYear(), 0, 0)) / 86400000;
+            const seasons = ["Northern Winter/Southern Summer", "Northern Spring/Southern Autumn", 
+                           "Northern Summer/Southern Winter", "Northern Autumn/Southern Spring"];
+            const seasonIndex = Math.floor((dayOfYear / 365.25 * 4 + 0.5) % 4);
+            document.getElementById('season').textContent = seasons[seasonIndex];
+            
+            // Update moon phase
+            const moonPhase = calculateMoonPhase(date);
+            document.getElementById('moon-phase').textContent = moonPhase;
+            
+            // Update sun position
+            const sunPos = sunLight.position.clone().normalize();
+            document.getElementById('sun-position').textContent = 
+                `Lat: ${(Math.asin(sunPos.y) * 180/Math.PI).toFixed(1)}°, ` +
+                `Lon: ${(Math.atan2(sunPos.z, sunPos.x) * 180/Math.PI).toFixed(1)}°`;
+        }
+
+        function calculateMoonPhase(date) {
+            // Simplified moon phase calculation
+            const year = date.getUTCFullYear();
+            const month = date.getUTCMonth();
+            const day = date.getUTCDate();
+            
+            const c = (year / 100) | 0;
+            const y = year - (year / 100 | 0) * 100;
+            let m = month + 1;
+            if (m < 3) { m += 12; y--; }
+            
+            const jd = (1461 * (y + 4716)) / 4 + (153 * m + 2) / 5 + day - 1524.5;
+            const daysSinceNew = (jd - 2451549.5) % 29.530588853;
+            
+            if (daysSinceNew < 1.84566) return "New Moon";
+            if (daysSinceNew < 5.53699) return "Waxing Crescent";
+            if (daysSinceNew < 9.22831) return "First Quarter";
+            if (daysSinceNew < 12.91963) return "Waxing Gibbous";
+            if (daysSinceNew < 16.61096) return "Full Moon";
+            if (daysSinceNew < 20.30228) return "Waning Gibbous";
+            if (daysSinceNew < 23.99361) return "Last Quarter";
+            if (daysSinceNew < 27.68493) return "Waning Crescent";
+            return "New Moon";
+        }
+
+        // ======================
+        // ANIMATION LOOP
+        // ======================
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Update time
+            const now = new Date();
+            if (!isPaused) {
+                if (timeSpeed === 1) {
+                    simulatedTime = new Date();
+                } else {
+                    simulatedTime = new Date(simulatedTime.getTime() + (16 * timeSpeed));
+                }
+            }
+            
+            // Update Earth and satellites
+            updateEarthRotation(simulatedTime);
+            updateSatellitePositions(simulatedTime);
+            updateUTCTime(simulatedTime);
+            
+            // Update controls and render
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // ======================
+        // INITIALIZATION
+        // ======================
+        window.addEventListener('resize', function() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        window.addEventListener('click', onMouseClick, false);
+
+        loadSatellites();
+        animate();
+    </script>
+</body>
+</html>
